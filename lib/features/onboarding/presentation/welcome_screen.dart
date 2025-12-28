@@ -47,7 +47,7 @@ class WelcomeScreen extends StatelessWidget {
                     ],
                   ),
                   child: const Icon(
-                    Icons.medical_services_rounded,
+                    Icons.work_outline_rounded,
                     size: 70,
                     color: Colors.white,
                   ),
