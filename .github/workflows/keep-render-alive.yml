@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Ping Render server
         run: |
-          curl -s -o /dev/null -w "%{http_code}\n" https://booking-backend-0b9z.onrender.com
+          curl -s -o /dev/null -w "%{http_code}\n" https://booking-backend-0b9z.onrender.com/health
