@@ -41,7 +41,9 @@ class ImageHelper {
       // Pick image
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 80,
+        imageQuality: 85,
+        maxWidth: 1024,
+        maxHeight: 1024,
       );
 
       if (pickedFile == null) return null;
@@ -49,26 +51,27 @@ class ImageHelper {
       // Crop image to square
       final croppedFile = await ImageCropper().cropImage(
         sourcePath: pickedFile.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        compressQuality: 80,
-        maxWidth: 512,
-        maxHeight: 512,
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Crop Image',
             toolbarColor: const Color(0xFF0EA5E9),
             toolbarWidgetColor: Colors.white,
+            statusBarColor: const Color(0xFF0EA5E9),
+            backgroundColor: Colors.white,
             activeControlsWidgetColor: const Color(0xFF0EA5E9),
             initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: true,
+            hideBottomControls: false,
           ),
           IOSUiSettings(
             title: 'Crop Image',
-            aspectRatioLockEnabled: true,
             resetAspectRatioEnabled: false,
-            aspectRatioPickerButtonHidden: true,
           ),
         ],
+        compressQuality: 85,
+        maxWidth: 512,
+        maxHeight: 512,
+        compressFormat: ImageCompressFormat.jpg,
       );
 
       if (croppedFile == null) return null;

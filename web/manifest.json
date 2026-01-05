@@ -1,6 +1,6 @@
 {
-    "name": "doctor_booking_app",
-    "short_name": "doctor_booking_app",
+    "name": "booking_app",
+    "short_name": "booking_app",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

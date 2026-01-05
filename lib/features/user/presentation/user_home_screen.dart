@@ -1,4 +1,4 @@
-import 'package:doctor_booking_app/services/api_client.dart';
+import 'package:booking_app/services/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../professional/presentation/become_professional_screen.dart';
