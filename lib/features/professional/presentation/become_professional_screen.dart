@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/api_client.dart';
+import '../../../services/image_helper.dart';
 
 class BecomeProfessionalScreen extends StatefulWidget {
   const BecomeProfessionalScreen({super.key});
@@ -13,152 +16,463 @@ class BecomeProfessionalScreen extends StatefulWidget {
 class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  // Controllers
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _aboutController = TextEditingController();
   final TextEditingController _experienceController = TextEditingController();
   final TextEditingController _feeController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _proofController = TextEditingController();
+  final TextEditingController _cityController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _tagController = TextEditingController();
 
-  String _selectedProfessionType = 'Select profession type';
-  String _selectedMode = 'BOTH';
-  String _bookingType = 'BOTH'; // NEW: TOKEN, TIMESLOT, or BOTH
-  String _selectedCity = 'Select City';
+  // State
+  List<dynamic> _categories = [];
+  int? _selectedCategoryId;
+  String? _selectedProfessionType;
+  String _consultationMode = 'BOTH';
+  String _bookingType = 'BOTH';
+  List<String> _tags = [];
+  String? _proofImage;
 
-  bool _isLoading = false;
+  bool _isLoadingCategories = true;
+  bool _isGettingLocation = false;
+  bool _isUploadingProof = false;
+  bool _isSubmitting = false;
 
-  final List<String> professionTypes = [
-    'Select profession type',
-    'doctors',
-    'lawyers',
-    'tutors',
-    'therapists',
-    'technicians',
-  ];
+  final int _maxTags = 5;
 
-  final List<String> modes = ['ONLINE', 'OFFLINE', 'BOTH'];
-  final List<String> bookingTypes = ['TOKEN', 'TIMESLOT', 'BOTH'];
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
 
-  final List<String> cities = [
-    'Select City',
-    'Hyderabad',
-    'Kondotty',
-    'Bangalore',
-    'Mumbai',
-    'Chennai',
-    'Delhi',
-    'Kolkata',
-  ];
+  Future<void> _loadCategories() async {
+    setState(() => _isLoadingCategories = true);
+    try {
+      final categories = await ApiClient.getCategories();
+      if (mounted) {
+        setState(() {
+          _categories = categories;
+          _isLoadingCategories = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingCategories = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading categories: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    }
+  }
 
-  final List<String> selectedTags = [];
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isGettingLocation = true);
 
-  final List<String> suggestedTags = [
-    'Home visit',
-    'Emergency',
-    'Weekend only',
-    'Kids friendly',
-    'Online only',
-    '24/7',
-  ];
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permission denied');
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Location permissions are permanently denied');
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 100,
+        ),
+      );
+
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+        final city = place.locality ?? place.subAdministrativeArea ?? 'Unknown';
+
+        setState(() {
+          _cityController.text = city;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Location detected: $city'),
+              backgroundColor: AppTheme.primaryGreen,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGettingLocation = false);
+      }
+    }
+  }
+
+  Future<void> _uploadProof() async {
+    setState(() => _isUploadingProof = true);
+
+    try {
+      final base64Image = await ImageHelper.pickAndCropImage(context);
+
+      if (base64Image != null && mounted) {
+        setState(() {
+          _proofImage = base64Image;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Document uploaded successfully'),
+            backgroundColor: AppTheme.primaryGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingProof = false);
+      }
+    }
+  }
+
+  void _addTag() {
+    final tag = _tagController.text.trim();
+    if (tag.isEmpty) return;
+
+    if (_tags.length >= _maxTags) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum $_maxTags tags allowed'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (_tags.contains(tag)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Tag already added'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _tags.add(tag);
+      _tagController.clear();
+    });
+  }
+
+  void _removeTag(String tag) {
+    setState(() {
+      _tags.remove(tag);
+    });
+  }
+
+  Future<void> _submitApplication() async {
+  if (!_formKey.currentState!.validate()) return;
+
+  if (_selectedCategoryId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Please select a category'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+    return;
+  }
+
+  setState(() => _isSubmitting = true);
+
+  try {
+    await ApiClient.applyProfessional(
+      title: _titleController.text.trim(),
+      professionType: _selectedProfessionType!,
+      categorySlug: _selectedProfessionType!,
+      about: _aboutController.text.trim(),
+      city: _cityController.text.trim(),
+      consultationMode: _consultationMode,
+      baseFee: int.parse(_feeController.text.trim()),
+      yearsExperience: int.parse(_experienceController.text.trim()),
+      bookingType: _bookingType,
+      address: _addressController.text.trim().isEmpty
+          ? null
+          : _addressController.text.trim(),
+      proof: _proofImage,
+      tags: _tags.isEmpty ? null : _tags,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            '✓ Application submitted successfully!\nYou\'ll be notified after admin approval.',
+          ),
+          backgroundColor: AppTheme.primaryGreen,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      Navigator.pop(context);
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+    }
+  }
+}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.lightBg,
       appBar: AppBar(title: const Text('Become a Professional')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeaderCard(context),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Basic details'),
-                const SizedBox(height: 12),
-                _buildProfessionDropdown(),
-                const SizedBox(height: 12),
-                _buildTextField(
-                  controller: _titleController,
-                  label: 'Profile title',
-                  hint: 'e.g. Senior cardiologist, Civil lawyer, Math tutor',
-                  icon: Icons.badge_outlined,
+      body: _isLoadingCategories
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeaderCard(),
+                    const SizedBox(height: 24),
+
+                    // Category Selection
+                    _buildSectionTitle('Professional Category'),
+                    const SizedBox(height: 12),
+                    _buildCategorySelector(),
+                    const SizedBox(height: 24),
+
+                    // Title
+                    _buildSectionTitle('Profile Title'),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      controller: _titleController,
+                      label: 'Professional Title',
+                      hint: 'e.g. Senior Cardiologist, Civil Lawyer',
+                      icon: Icons.badge_outlined,
+                      validator: (value) =>
+                          value?.trim().isEmpty ?? true ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // About
+                    _buildSectionTitle('About Your Service'),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      controller: _aboutController,
+                      label: 'Description',
+                      hint: 'Describe your expertise and services',
+                      icon: Icons.description_outlined,
+                      maxLines: 4,
+                      validator: (value) =>
+                          value?.trim().isEmpty ?? true ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Experience & Fee Row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSectionTitle('Experience'),
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _experienceController,
+                                label: 'Years',
+                                hint: '5',
+                                icon: Icons.timeline_outlined,
+                                keyboardType: TextInputType.number,
+                                validator: (value) {
+                                  if (value?.trim().isEmpty ?? true) {
+                                    return 'Required';
+                                  }
+                                  if (int.tryParse(value!) == null) {
+                                    return 'Invalid';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSectionTitle('Fee (₹)'),
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _feeController,
+                                label: 'Amount',
+                                hint: '500',
+                                icon: Icons.currency_rupee_outlined,
+                                keyboardType: TextInputType.number,
+                                validator: (value) {
+                                  if (value?.trim().isEmpty ?? true) {
+                                    return 'Required';
+                                  }
+                                  if (int.tryParse(value!) == null) {
+                                    return 'Invalid';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // City
+                    _buildSectionTitle('City'),
+                    const SizedBox(height: 12),
+                    _buildCityField(),
+                    const SizedBox(height: 24),
+
+                    // Address
+                    _buildSectionTitle('Address/Clinic (Optional)'),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      controller: _addressController,
+                      label: 'Address',
+                      hint: 'e.g. MG Road, Near City Hospital',
+                      icon: Icons.location_on_outlined,
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Consultation Mode
+                    _buildSectionTitle('Consultation Mode'),
+                    const SizedBox(height: 12),
+                    _buildModeSelector(),
+                    const SizedBox(height: 24),
+
+                    // Booking Type
+                    _buildSectionTitle('Booking Type'),
+                    const SizedBox(height: 12),
+                    _buildBookingTypeSelector(),
+                    const SizedBox(height: 24),
+
+                    // Tags
+                    _buildSectionTitle('Service Tags (Max $_maxTags)'),
+                    const SizedBox(height: 12),
+                    _buildTagInput(),
+                    if (_tags.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _buildTagsList(),
+                    ],
+                    const SizedBox(height: 24),
+
+                    // Proof Upload
+                    _buildSectionTitle('Verification Document'),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Upload license, certificate, or ID proof',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textLight),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildProofUpload(),
+                    const SizedBox(height: 32),
+
+                    // Submit Button
+                    _buildSubmitButton(),
+                    const SizedBox(height: 16),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                _buildAboutField(),
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('Location & availability'),
-                const SizedBox(height: 12),
-                _buildCityDropdown(),
-                const SizedBox(height: 12),
-                _buildTextField(
-                  controller: _locationController,
-                  label: 'Address / Area (optional)',
-                  hint: 'e.g. MG Road, JP Nagar...',
-                  icon: Icons.location_on_outlined,
-                  required: false,
-                ),
-                const SizedBox(height: 12),
-                _buildModeSection(),
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('Booking Type'),
-                const SizedBox(height: 12),
-                _buildBookingTypeSection(),
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('Consultation & fees'),
-                const SizedBox(height: 12),
-                _buildFeeField(),
-                const SizedBox(height: 12),
-                _buildExperienceField(),
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('License/Certificate (optional)'),
-                const SizedBox(height: 12),
-                _buildTextField(
-                  controller: _proofController,
-                  label: 'License/Certificate Number',
-                  hint: 'Enter your professional license ID',
-                  icon: Icons.verified_user_outlined,
-                  required: false,
-                ),
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('Highlights (optional)'),
-                const SizedBox(height: 8),
-                const Text(
-                  'Add a few tags that describe your service',
-                  style: TextStyle(fontSize: 13, color: AppTheme.textLight),
-                ),
-                const SizedBox(height: 12),
-                _buildTagChips(),
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('Verification (for admin)'),
-                const SizedBox(height: 8),
-                _buildVerificationHintCard(),
-                const SizedBox(height: 24),
-
-                _buildSubmitButton(),
-                const SizedBox(height: 16),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 
-  Widget _buildHeaderCard(BuildContext context) {
+  Widget _buildHeaderCard() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: AppTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: AppTheme.primaryBlue.withValues(alpha: 0.3),
@@ -173,18 +487,18 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
               Icons.workspace_premium_outlined,
               color: Colors.white,
-              size: 32,
+              size: 28,
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Fill these details to show your profile to users after admin approval.',
+              'Submit your application to become a verified professional on our platform',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.95),
                 fontSize: 13,
@@ -201,127 +515,380 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
     return Text(
       title,
       style: const TextStyle(
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: FontWeight.w600,
         color: AppTheme.textDark,
       ),
     );
   }
 
-  Widget _buildProfessionDropdown() {
+  Widget _buildCategorySelector() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
       ),
-      child: DropdownButtonFormField<String>(
-        initialValue: _selectedProfessionType,
+      child: DropdownButtonFormField<int>(
+        initialValue: _selectedCategoryId,
         decoration: InputDecoration(
-          labelText: 'Profession type',
-          labelStyle: const TextStyle(color: AppTheme.textLight),
+          hintText: 'Select your profession',
           prefixIcon: const Icon(
-            Icons.work_outline_rounded,
+            Icons.work_outline,
             color: AppTheme.primaryBlue,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
-          filled: true,
-          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
-        items: professionTypes.map((profession) {
-          return DropdownMenuItem<String>(
-            value: profession,
-            child: Text(
-              profession == 'Select profession type' 
-                  ? profession 
-                  : profession[0].toUpperCase() + profession.substring(1),
-              style: TextStyle(
-                color: profession == 'Select profession type'
-                    ? AppTheme.textLight
-                    : AppTheme.textDark,
-              ),
-            ),
+        items: _categories.map((category) {
+          return DropdownMenuItem<int>(
+            value: category['id'],
+            child: Text(category['name']),
           );
         }).toList(),
         onChanged: (value) {
           setState(() {
-            _selectedProfessionType = value!;
+            _selectedCategoryId = value;
+            final category = _categories.firstWhere((c) => c['id'] == value);
+            _selectedProfessionType = category['slug'];
           });
         },
-        validator: (value) {
-          if (value == null || value == 'Select profession type') {
-            return 'Please select a profession type';
-          }
-          return null;
-        },
+        validator: (value) => value == null ? 'Please select a category' : null,
       ),
     );
   }
 
-  Widget _buildCityDropdown() {
+  Widget _buildCityField() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
       ),
-      child: DropdownButtonFormField<String>(
-        initialValue: _selectedCity,
+      child: TextFormField(
+        controller: _cityController,
         decoration: InputDecoration(
           labelText: 'City',
-          labelStyle: const TextStyle(color: AppTheme.textLight),
+          hintText: 'Enter your city',
           prefixIcon: const Icon(
             Icons.location_city_outlined,
             color: AppTheme.primaryGreen,
           ),
+          suffixIcon: _isGettingLocation
+              ? Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primaryBlue,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: Icon(Icons.my_location, color: AppTheme.primaryBlue),
+                  onPressed: _getCurrentLocation,
+                  tooltip: 'Use current location',
+                ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
-          filled: true,
-          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
-        items: cities.map((city) {
-          return DropdownMenuItem<String>(
-            value: city,
-            child: Text(
-              city,
-              style: TextStyle(
-                color: city == 'Select City'
-                    ? AppTheme.textLight
-                    : AppTheme.textDark,
+        validator: (value) => value?.trim().isEmpty ?? true ? 'Required' : null,
+      ),
+    );
+  }
+
+  Widget _buildModeSelector() {
+    return Row(
+      children: [
+        _buildModeChip('ONLINE', 'Online', Icons.videocam),
+        const SizedBox(width: 8),
+        _buildModeChip('OFFLINE', 'Offline', Icons.place),
+        const SizedBox(width: 8),
+        _buildModeChip('BOTH', 'Both', Icons.all_inclusive),
+      ],
+    );
+  }
+
+  Widget _buildModeChip(String value, String label, IconData icon) {
+    final isSelected = _consultationMode == value;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _consultationMode = value),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppTheme.primaryBlue.withValues(alpha: 0.1)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? AppTheme.primaryBlue : Colors.grey.shade300,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? AppTheme.primaryBlue : AppTheme.textLight,
+                size: 24,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected ? AppTheme.primaryBlue : AppTheme.textDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookingTypeSelector() {
+    return Column(
+      children: [
+        _buildBookingTypeOption(
+          'TOKEN',
+          'Token Based',
+          'Queue system with token numbers',
+        ),
+        const SizedBox(height: 8),
+        _buildBookingTypeOption(
+          'TIMESLOT',
+          'Time Slot',
+          'Specific appointment times',
+        ),
+        const SizedBox(height: 8),
+        _buildBookingTypeOption('BOTH', 'Both', 'Allow both methods'),
+      ],
+    );
+  }
+
+  Widget _buildBookingTypeOption(String value, String title, String subtitle) {
+    final isSelected = _bookingType == value;
+    return InkWell(
+      onTap: () => setState(() => _bookingType = value),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primaryBlue.withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryBlue : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Radio<String>(
+              value: value,
+              groupValue: _bookingType,
+              onChanged: (val) => setState(() => _bookingType = val!),
+              activeColor: AppTheme.primaryBlue,
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? AppTheme.primaryBlue
+                          : AppTheme.textDark,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 11, color: AppTheme.textLight),
+                  ),
+                ],
               ),
             ),
-          );
-        }).toList(),
-        onChanged: (value) {
-          setState(() {
-            _selectedCity = value!;
-          });
-        },
-        validator: (value) {
-          if (value == null || value == 'Select City') {
-            return 'Please select a city';
-          }
-          return null;
-        },
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTagInput() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: TextField(
+              controller: _tagController,
+              decoration: InputDecoration(
+                hintText: 'Add a tag (e.g. Home visit, Emergency)',
+                prefixIcon: const Icon(
+                  Icons.local_offer_outlined,
+                  color: AppTheme.primaryGreen,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
+              onSubmitted: (_) => _addTag(),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          decoration: BoxDecoration(
+            gradient: AppTheme.primaryGradient,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            onPressed: _addTag,
+            icon: const Icon(Icons.add, color: Colors.white),
+            tooltip: 'Add tag',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTagsList() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _tags.map((tag) {
+        return Chip(
+          label: Text(tag),
+          deleteIcon: const Icon(Icons.close, size: 16),
+          onDeleted: () => _removeTag(tag),
+          backgroundColor: AppTheme.primaryGreen.withValues(alpha: 0.1),
+          labelStyle: TextStyle(
+            color: AppTheme.primaryGreen,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: AppTheme.primaryGreen),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildProofUpload() {
+    return InkWell(
+      onTap: _isUploadingProof ? null : _uploadProof,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _proofImage != null
+              ? AppTheme.primaryGreen.withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _proofImage != null
+                ? AppTheme.primaryGreen
+                : Colors.grey.shade300,
+            width: _proofImage != null ? 2 : 1,
+            style: _proofImage == null ? BorderStyle.solid : BorderStyle.solid,
+          ),
+        ),
+        child: _isUploadingProof
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primaryBlue,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text('Uploading...'),
+                ],
+              )
+            : Row(
+                children: [
+                  Icon(
+                    _proofImage != null
+                        ? Icons.check_circle
+                        : Icons.upload_file,
+                    color: _proofImage != null
+                        ? AppTheme.primaryGreen
+                        : AppTheme.primaryBlue,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _proofImage != null
+                              ? 'Document Uploaded'
+                              : 'Upload Document',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: _proofImage != null
+                                ? AppTheme.primaryGreen
+                                : AppTheme.textDark,
+                          ),
+                        ),
+                        Text(
+                          _proofImage != null
+                              ? 'Tap to change'
+                              : 'License, certificate, or ID proof',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.textLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: AppTheme.textLight,
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -332,331 +899,33 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
     required String hint,
     required IconData icon,
     int maxLines = 1,
-    bool required = true,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
   }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: TextFormField(
         controller: controller,
         maxLines: maxLines,
+        keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: AppTheme.textLight),
           hintText: hint,
-          hintStyle: const TextStyle(color: AppTheme.textLight),
           prefixIcon: Icon(icon, color: AppTheme.primaryBlue),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
-          filled: true,
-          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
-        validator: required
-            ? (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Required field';
-                }
-                return null;
-              }
-            : null,
-      ),
-    );
-  }
-
-  Widget _buildAboutField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: _aboutController,
-        maxLines: 4,
-        decoration: InputDecoration(
-          labelText: 'About your service',
-          labelStyle: const TextStyle(color: AppTheme.textLight),
-          hintText:
-              'Briefly describe what you offer, your expertise, and how you help users.',
-          hintStyle: const TextStyle(color: AppTheme.textLight),
-          alignLabelWithHint: true,
-          prefixIcon: const Icon(
-            Icons.description_outlined,
-            color: AppTheme.primaryBlue,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-        ),
-        validator: (value) {
-          if (value == null || value.trim().isEmpty) {
-            return 'Please describe your service';
-          }
-          return null;
-        },
-      ),
-    );
-  }
-
-  Widget _buildModeSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Consultation mode',
-          style: TextStyle(fontSize: 14, color: AppTheme.textLight),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: modes.map((mode) {
-            final isSelected = _selectedMode == mode;
-            return ChoiceChip(
-              label: Text(mode[0] + mode.substring(1).toLowerCase()),
-              selected: isSelected,
-              onSelected: (_) {
-                setState(() {
-                  _selectedMode = mode;
-                });
-              },
-              backgroundColor: Colors.white,
-              selectedColor: AppTheme.primaryBlue.withValues(alpha: 0.15),
-              labelStyle: TextStyle(
-                color: isSelected ? AppTheme.primaryBlue : AppTheme.textDark,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: isSelected
-                      ? AppTheme.primaryBlue
-                      : Colors.grey.shade300,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBookingTypeSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'How do you want to manage appointments?',
-          style: TextStyle(fontSize: 14, color: AppTheme.textLight),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: bookingTypes.map((type) {
-            final isSelected = _bookingType == type;
-            String displayText;
-            switch (type) {
-              case 'TOKEN':
-                displayText = 'Token Based';
-                break;
-              case 'TIMESLOT':
-                displayText = 'Time Slot';
-                break;
-              default:
-                displayText = 'Both';
-            }
-            return ChoiceChip(
-              label: Text(displayText),
-              selected: isSelected,
-              onSelected: (_) {
-                setState(() {
-                  _bookingType = type;
-                });
-              },
-              backgroundColor: Colors.white,
-              selectedColor: AppTheme.primaryGreen.withValues(alpha: 0.15),
-              labelStyle: TextStyle(
-                color: isSelected ? AppTheme.primaryGreen : AppTheme.textDark,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: isSelected
-                      ? AppTheme.primaryGreen
-                      : Colors.grey.shade300,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeeField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: _feeController,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(
-          labelText: 'Approx. consultation fee',
-          labelStyle: const TextStyle(color: AppTheme.textLight),
-          hintText: 'e.g. 500',
-          prefixIcon: const Icon(
-            Icons.currency_rupee_outlined,
-            color: AppTheme.primaryGreen,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-        ),
-        validator: (value) {
-          if (value == null || value.trim().isEmpty) {
-            return 'Please enter a fee (approx.)';
-          }
-          return null;
-        },
-      ),
-    );
-  }
-
-  Widget _buildExperienceField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: _experienceController,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(
-          labelText: 'Years of experience',
-          labelStyle: const TextStyle(color: AppTheme.textLight),
-          hintText: 'e.g. 5',
-          prefixIcon: const Icon(
-            Icons.timeline_outlined,
-            color: AppTheme.primaryBlue,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-        ),
-        validator: (value) {
-          if (value == null || value.trim().isEmpty) {
-            return 'Please enter your experience';
-          }
-          return null;
-        },
-      ),
-    );
-  }
-
-  Widget _buildTagChips() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: suggestedTags.map((tag) {
-        final isSelected = selectedTags.contains(tag);
-        return FilterChip(
-          label: Text(tag),
-          selected: isSelected,
-          onSelected: (selected) {
-            setState(() {
-              if (selected) {
-                selectedTags.add(tag);
-              } else {
-                selectedTags.remove(tag);
-              }
-            });
-          },
-          backgroundColor: Colors.white,
-          selectedColor: AppTheme.primaryGreen.withValues(alpha: 0.15),
-          labelStyle: TextStyle(
-            color: isSelected ? AppTheme.primaryGreen : AppTheme.textDark,
-            fontSize: 12,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(
-              color: isSelected ? AppTheme.primaryGreen : Colors.grey.shade300,
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildVerificationHintCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.primaryBlue.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.25)),
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.verified_user_outlined, color: AppTheme.primaryBlue),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Admins will review your details before approving your professional profile. They may contact you if more information is needed.',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppTheme.darkBlue,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
+        validator: validator,
       ),
     );
   }
@@ -667,7 +936,7 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
       height: 56,
       decoration: BoxDecoration(
         gradient: AppTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: AppTheme.primaryBlue.withValues(alpha: 0.3),
@@ -677,16 +946,15 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
         ],
       ),
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _submitApplication,
+        onPressed: _isSubmitting ? null : _submitApplication,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
-        child: _isLoading
+        child: _isSubmitting
             ? const SizedBox(
                 width: 24,
                 height: 24,
@@ -696,74 +964,15 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
                 ),
               )
             : const Text(
-                'Submit for review',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                'Submit Application',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
       ),
     );
-  }
-
-  Future<void> _submitApplication() async {
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      await ApiClient.applyProfessional(
-        title: _titleController.text.trim(),
-        professionType: _selectedProfessionType,
-        categorySlug: _selectedProfessionType.toLowerCase().replaceAll(' ', '-'),
-        about: _aboutController.text.trim(),
-        city: _selectedCity,
-        consultationMode: _selectedMode,
-        baseFee: int.parse(_feeController.text.trim()),
-        yearsExperience: int.parse(_experienceController.text.trim()),
-        bookingType: _bookingType, // FIXED: Added bookingType
-        address: _locationController.text.trim().isEmpty
-            ? null
-            : _locationController.text.trim(),
-        proof: _proofController.text.trim().isEmpty
-            ? null
-            : _proofController.text.trim(),
-        tags: selectedTags.isEmpty ? null : selectedTags,
-      );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Application submitted! You will be notified after admin approval.',
-          ),
-          backgroundColor: AppTheme.primaryGreen,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-      
-      Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
   }
 
   @override
@@ -772,8 +981,9 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
     _aboutController.dispose();
     _experienceController.dispose();
     _feeController.dispose();
-    _locationController.dispose();
-    _proofController.dispose();
+    _cityController.dispose();
+    _addressController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 }

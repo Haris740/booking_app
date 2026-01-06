@@ -18,7 +18,10 @@ class ApiClient {
   }
 
   // Save tokens
-  static Future<void> _saveTokens(String accessToken, String refreshToken) async {
+  static Future<void> _saveTokens(
+    String accessToken,
+    String refreshToken,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('accessToken', accessToken);
     await prefs.setString('refreshToken', refreshToken);
@@ -82,9 +85,7 @@ class ApiClient {
     bool requiresAuth = false,
   }) async {
     final uri = Uri.parse('$baseUrl$endpoint');
-    final headers = {
-      'Content-Type': 'application/json',
-    };
+    final headers = {'Content-Type': 'application/json'};
 
     if (requiresAuth) {
       final token = await _getAccessToken();
@@ -140,7 +141,7 @@ class ApiClient {
     Map<String, String>? queryParams,
   }) async {
     var uri = Uri.parse('$baseUrl$endpoint');
-    
+
     if (queryParams != null && queryParams.isNotEmpty) {
       uri = uri.replace(queryParameters: queryParams);
     }
@@ -192,9 +193,7 @@ class ApiClient {
     bool requiresAuth = false,
   }) async {
     final uri = Uri.parse('$baseUrl$endpoint');
-    final headers = {
-      'Content-Type': 'application/json',
-    };
+    final headers = {'Content-Type': 'application/json'};
 
     if (requiresAuth) {
       final token = await _getAccessToken();
@@ -243,13 +242,16 @@ class ApiClient {
   }
 
   // ==================== AUTH ====================
-  
+
   static Future<String> sendOtp(String phone) async {
     final response = await post('/auth/send-otp', {'phone': phone});
     return response['message'];
   }
 
-  static Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
+  static Future<Map<String, dynamic>> verifyOtp(
+    String phone,
+    String otp,
+  ) async {
     final response = await post('/auth/verify-otp', {
       'phone': phone,
       'otp': otp,
@@ -260,7 +262,7 @@ class ApiClient {
       response['tokens']['refreshToken'],
     );
     await _saveUserId(response['user']['id']);
-    
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('userPhone', phone);
     if (response['user']['name'] != null) {
@@ -281,15 +283,11 @@ class ApiClient {
     String? email,
     String? city,
   }) async {
-    final response = await post(
-      '/auth/register',
-      {
-        'name': name,
-        if (email != null) 'email': email,
-        if (city != null) 'city': city,
-      },
-      requiresAuth: true,
-    );
+    final response = await post('/auth/register', {
+      'name': name,
+      if (email != null) 'email': email,
+      if (city != null) 'city': city,
+    }, requiresAuth: true);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('userName', name);
@@ -304,10 +302,10 @@ class ApiClient {
   }
 
   // ==================== USER PROFILE ====================
-  
+
   static Future<Map<String, dynamic>> getMyProfile() async {
     final response = await get('/me', requiresAuth: true);
-    
+
     final user = response['user'];
     final prefs = await SharedPreferences.getInstance();
     if (user['name'] != null) {
@@ -322,7 +320,7 @@ class ApiClient {
     if (user['phone'] != null) {
       await prefs.setString('userPhone', user['phone']);
     }
-    
+
     return user;
   }
 
@@ -332,17 +330,13 @@ class ApiClient {
     String? city,
     String? profilePicture,
   }) async {
-    final response = await patch(
-      '/me',
-      {
-        if (name != null) 'name': name,
-        if (email != null) 'email': email,
-        if (city != null) 'city': city,
-        if (profilePicture != null) 'profilePicture': profilePicture,
-      },
-      requiresAuth: true,
-    );
-    
+    final response = await patch('/me', {
+      if (name != null) 'name': name,
+      if (email != null) 'email': email,
+      if (city != null) 'city': city,
+      if (profilePicture != null) 'profilePicture': profilePicture,
+    }, requiresAuth: true);
+
     final user = response['user'];
     final prefs = await SharedPreferences.getInstance();
     if (user['name'] != null) {
@@ -354,7 +348,7 @@ class ApiClient {
     if (user['email'] != null) {
       await prefs.setString('userEmail', user['email']);
     }
-    
+
     return user;
   }
 
@@ -371,7 +365,7 @@ class ApiClient {
       'page': page.toString(),
       'limit': limit.toString(),
     };
-    
+
     if (city != null) params['city'] = city;
     if (professionType != null) params['professionType'] = professionType;
     if (q != null) params['q'] = q;
@@ -399,25 +393,26 @@ class ApiClient {
     String? proof,
     List<String>? tags,
   }) async {
-    final response = await post(
-      '/professional/apply',
-      {
-        'title': title,
-        'professionType': professionType,
-        'categorySlug': categorySlug,
-        'about': about,
-        'city': city,
-        'consultationMode': consultationMode,
-        'baseFee': baseFee,
-        'yearsExperience': yearsExperience,
-        'bookingType': bookingType,
-        if (address != null) 'address': address,
-        if (proof != null) 'proof': proof,
-        if (tags != null) 'tags': tags,
-      },
-      requiresAuth: true,
-    );
+    final response = await post('/professional/apply', {
+      'title': title,
+      'professionType': professionType,
+      'categorySlug': categorySlug,
+      'about': about,
+      'city': city,
+      'consultationMode': consultationMode,
+      'baseFee': baseFee,
+      'yearsExperience': yearsExperience,
+      'bookingType': bookingType,
+      if (address != null) 'address': address,
+      if (proof != null) 'proof': proof,
+      if (tags != null) 'tags': tags,
+    }, requiresAuth: true);
     return response;
+  }
+
+  static Future<List<dynamic>> getCategories() async {
+    final response = await get('/professional/categories');
+    return response['categories'];
   }
 
   // ==================== BOOKINGS ====================
@@ -430,18 +425,14 @@ class ApiClient {
     required String phone,
     required DateTime appointmentDate,
   }) async {
-    final response = await post(
-      '/bookings/token',
-      {
-        'professionalId': professionalId,
-        'name': name,
-        'age': age,
-        'gender': gender,
-        'phone': phone,
-        'appointmentDate': appointmentDate.toIso8601String(),
-      },
-      requiresAuth: true,
-    );
+    final response = await post('/bookings/token', {
+      'professionalId': professionalId,
+      'name': name,
+      'age': age,
+      'gender': gender,
+      'phone': phone,
+      'appointmentDate': appointmentDate.toIso8601String(),
+    }, requiresAuth: true);
     return response['booking'];
   }
 
@@ -454,19 +445,15 @@ class ApiClient {
     required DateTime appointmentDate,
     required String timeSlot,
   }) async {
-    final response = await post(
-      '/bookings/timeslot',
-      {
-        'professionalId': professionalId,
-        'name': name,
-        'age': age,
-        'gender': gender,
-        'phone': phone,
-        'appointmentDate': appointmentDate.toIso8601String(),
-        'timeSlot': timeSlot,
-      },
-      requiresAuth: true,
-    );
+    final response = await post('/bookings/timeslot', {
+      'professionalId': professionalId,
+      'name': name,
+      'age': age,
+      'gender': gender,
+      'phone': phone,
+      'appointmentDate': appointmentDate.toIso8601String(),
+      'timeSlot': timeSlot,
+    }, requiresAuth: true);
     return response['booking'];
   }
 
@@ -476,7 +463,10 @@ class ApiClient {
   }
 
   static Future<Map<String, dynamic>> getBookingStatus(String bookingId) async {
-    final response = await get('/bookings/$bookingId/status', requiresAuth: true);
+    final response = await get(
+      '/bookings/$bookingId/status',
+      requiresAuth: true,
+    );
     return response;
   }
 
@@ -497,13 +487,9 @@ class ApiClient {
   }
 
   static Future<Map<String, dynamic>?> callNextPatient({DateTime? date}) async {
-    final response = await post(
-      '/bookings/call-next',
-      {
-        if (date != null) 'date': date.toIso8601String(),
-      },
-      requiresAuth: true,
-    );
+    final response = await post('/bookings/call-next', {
+      if (date != null) 'date': date.toIso8601String(),
+    }, requiresAuth: true);
     return response['nextToken'];
   }
 
@@ -519,7 +505,10 @@ class ApiClient {
   // ==================== ADMIN ====================
 
   static Future<List<dynamic>> getPendingProfessionals() async {
-    final response = await get('/admin/professionals/pending', requiresAuth: true);
+    final response = await get(
+      '/admin/professionals/pending',
+      requiresAuth: true,
+    );
     return response['professionals'];
   }
 
@@ -527,13 +516,9 @@ class ApiClient {
     String id, {
     String? adminNote,
   }) async {
-    final response = await patch(
-      '/admin/professionals/$id/approve',
-      {
-        if (adminNote != null) 'adminNote': adminNote,
-      },
-      requiresAuth: true,
-    );
+    final response = await patch('/admin/professionals/$id/approve', {
+      if (adminNote != null) 'adminNote': adminNote,
+    }, requiresAuth: true);
     return response['professional'];
   }
 
@@ -541,13 +526,9 @@ class ApiClient {
     String id, {
     String? adminNote,
   }) async {
-    final response = await patch(
-      '/admin/professionals/$id/reject',
-      {
-        if (adminNote != null) 'adminNote': adminNote,
-      },
-      requiresAuth: true,
-    );
+    final response = await patch('/admin/professionals/$id/reject', {
+      if (adminNote != null) 'adminNote': adminNote,
+    }, requiresAuth: true);
     return response['professional'];
   }
 
