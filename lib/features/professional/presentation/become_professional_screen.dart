@@ -31,7 +31,7 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
   String? _selectedProfessionType;
   String _consultationMode = 'BOTH';
   String _bookingType = 'BOTH';
-  List<String> _tags = [];
+  final List<String> _tags = [];
   String? _proofImage;
 
   bool _isLoadingCategories = true;
@@ -230,73 +230,78 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
   }
 
   Future<void> _submitApplication() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  if (_selectedCategoryId == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Please select a category'),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-    return;
-  }
-
-  setState(() => _isSubmitting = true);
-
-  try {
-    await ApiClient.applyProfessional(
-      title: _titleController.text.trim(),
-      professionType: _selectedProfessionType!,
-      categorySlug: _selectedProfessionType!,
-      about: _aboutController.text.trim(),
-      city: _cityController.text.trim(),
-      consultationMode: _consultationMode,
-      baseFee: int.parse(_feeController.text.trim()),
-      yearsExperience: int.parse(_experienceController.text.trim()),
-      bookingType: _bookingType,
-      address: _addressController.text.trim().isEmpty
-          ? null
-          : _addressController.text.trim(),
-      proof: _proofImage,
-      tags: _tags.isEmpty ? null : _tags,
-    );
-
-    if (mounted) {
+    if (_selectedCategoryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            '✓ Application submitted successfully!\nYou\'ll be notified after admin approval.',
-          ),
-          backgroundColor: AppTheme.primaryGreen,
+          content: const Text('Please select a category'),
+          backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
         ),
       );
-      Navigator.pop(context);
+      return;
     }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      await ApiClient.applyProfessional(
+        title: _titleController.text.trim(),
+        professionType: _selectedProfessionType!,
+        categorySlug: _selectedProfessionType!,
+        categoryId: _selectedCategoryId!,
+        about: _aboutController.text.trim(),
+        city: _cityController.text.trim(),
+        consultationMode: _consultationMode,
+        baseFee: int.parse(_feeController.text.trim()),
+        yearsExperience: int.parse(_experienceController.text.trim()),
+        bookingType: _bookingType,
+        address: _addressController.text.trim().isEmpty
+            ? null
+            : _addressController.text.trim(),
+        proof: _proofImage,
+        tags: _tags.isEmpty ? null : _tags,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              '✓ Application submitted successfully!\nYou\'ll be notified after admin approval.',
+            ),
+            backgroundColor: AppTheme.primaryGreen,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
-    }
-  } finally {
-    if (mounted) {
-      setState(() => _isSubmitting = false);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -701,33 +706,127 @@ class _BecomeProfessionalScreenState extends State<BecomeProfessionalScreen> {
             width: isSelected ? 2 : 1,
           ),
         ),
-        child: Row(
+        child: Column(
           children: [
-            Radio<String>(
-              value: value,
-              groupValue: _bookingType,
-              onChanged: (val) => setState(() => _bookingType = val!),
-              activeColor: AppTheme.primaryBlue,
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
+            // Token System Option
+            InkWell(
+              onTap: () => setState(() => _bookingType = 'TOKEN'),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _bookingType == 'TOKEN'
+                      ? AppTheme.primaryBlue.withValues(alpha: 0.08)
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: _bookingType == 'TOKEN'
+                        ? AppTheme.primaryBlue
+                        : Colors.grey.shade300,
+                    width: 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _bookingType == 'TOKEN'
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: _bookingType == 'TOKEN'
                           ? AppTheme.primaryBlue
-                          : AppTheme.textDark,
+                          : Colors.grey.shade600,
+                      size: 22,
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Token System',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _bookingType == 'TOKEN'
+                                  ? AppTheme.primaryBlue
+                                  : AppTheme.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Users get sequential tokens, wait in queue',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Time Slot Option
+            InkWell(
+              onTap: () => setState(() => _bookingType = 'TIMESLOT'),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _bookingType == 'TIMESLOT'
+                      ? AppTheme.primaryBlue.withValues(alpha: 0.08)
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: _bookingType == 'TIMESLOT'
+                        ? AppTheme.primaryBlue
+                        : Colors.grey.shade300,
+                    width: 1.5,
                   ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(fontSize: 11, color: AppTheme.textLight),
-                  ),
-                ],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _bookingType == 'TIMESLOT'
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: _bookingType == 'TIMESLOT'
+                          ? AppTheme.primaryBlue
+                          : Colors.grey.shade600,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Time Slot Booking',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _bookingType == 'TIMESLOT'
+                                  ? AppTheme.primaryBlue
+                                  : AppTheme.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Users book specific time slots in advance',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

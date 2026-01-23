@@ -18,7 +18,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  
+
   String userPhone = '';
   String? _profilePicture;
   bool _isLoading = false;
@@ -34,11 +34,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserData() async {
     setState(() => _isLoading = true);
-    
+
     try {
       // Fetch from API to get latest data including profile picture
       final user = await ApiClient.getMyProfile();
-      
+
       if (mounted) {
         setState(() {
           _nameController.text = user['name'] ?? '';
@@ -81,8 +81,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 30),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 5),
+        ),
       );
 
       List<Placemark> placemarks = await placemarkFromCoordinates(
@@ -93,7 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         final city = place.locality ?? place.subAdministrativeArea ?? 'Unknown';
-        
+
         setState(() {
           _cityController.text = city;
         });
@@ -104,7 +106,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               content: Text('Location detected: $city'),
               backgroundColor: AppTheme.primaryGreen,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         }
@@ -116,7 +120,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -132,7 +138,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final base64Image = await ImageHelper.pickAndCropImage(context);
-      
+
       if (base64Image != null && mounted) {
         setState(() {
           _profilePicture = base64Image;
@@ -143,7 +149,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             content: const Text('Picture selected! Don\'t forget to save.'),
             backgroundColor: AppTheme.primaryBlue,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -154,7 +162,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -172,8 +182,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await ApiClient.updateProfile(
         name: _nameController.text.trim(),
         city: _cityController.text.trim(),
-        email: _emailController.text.trim().isEmpty 
-            ? null 
+        email: _emailController.text.trim().isEmpty
+            ? null
             : _emailController.text.trim(),
         profilePicture: _profilePicture,
       );
@@ -184,7 +194,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             content: const Text('Profile updated successfully'),
             backgroundColor: AppTheme.primaryGreen,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
         Navigator.pop(context);
@@ -196,7 +208,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -230,7 +244,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (confirm == true && mounted) {
       await ApiClient.clearTokens();
-      
+
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -270,10 +284,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         height: 120,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: _profilePicture == null 
-                              ? AppTheme.primaryGradient 
+                          gradient: _profilePicture == null
+                              ? AppTheme.primaryGradient
                               : null,
-                          color: _profilePicture != null ? Colors.grey.shade200 : null,
+                          color: _profilePicture != null
+                              ? Colors.grey.shade200
+                              : null,
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.1),
@@ -285,18 +301,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: ClipOval(
                           child: _profilePicture != null
                               ? ImageHelper.base64ToImage(_profilePicture) ??
-                                  Center(
-                                    child: Text(
-                                      _nameController.text.isNotEmpty
-                                          ? _nameController.text[0].toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                        fontSize: 48,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
+                                    Center(
+                                      child: Text(
+                                        _nameController.text.isNotEmpty
+                                            ? _nameController.text[0]
+                                                  .toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                          fontSize: 48,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
                                       ),
-                                    ),
-                                  )
+                                    )
                               : Center(
                                   child: Text(
                                     _nameController.text.isNotEmpty
@@ -352,10 +369,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 8),
                   const Text(
                     'Tap to change picture',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textLight,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textLight),
                   ),
                   const SizedBox(height: 32),
 
@@ -369,7 +383,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.phone_outlined, color: AppTheme.textLight),
+                        const Icon(
+                          Icons.phone_outlined,
+                          color: AppTheme.textLight,
+                        ),
                         const SizedBox(width: 12),
                         Text(
                           userPhone.isNotEmpty ? userPhone : 'Phone not set',
