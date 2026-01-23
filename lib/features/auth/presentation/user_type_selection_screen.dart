@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../patient/presentation/patient_home_screen.dart';
+import '../../user/presentation/user_home_screen.dart';
 import '../../../core/theme/app_theme.dart';
 
 class UserTypeSelectionScreen extends StatelessWidget {
@@ -82,7 +82,7 @@ class UserTypeSelectionScreen extends StatelessWidget {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const PatientHomeScreen(),
+                            builder: (context) => const UserHomeScreen(),
                           ),
                         );
                       },

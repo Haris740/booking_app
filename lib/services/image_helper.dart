@@ -56,7 +56,7 @@ class ImageHelper {
             toolbarTitle: 'Crop Image',
             toolbarColor: const Color(0xFF0EA5E9),
             toolbarWidgetColor: Colors.white,
-            statusBarColor: const Color(0xFF0EA5E9),
+            statusBarLight: false,
             backgroundColor: Colors.white,
             activeControlsWidgetColor: const Color(0xFF0EA5E9),
             initAspectRatio: CropAspectRatioPreset.square,

@@ -47,8 +47,13 @@ class _ProfessionalSearchScreenState extends State<ProfessionalSearchScreen> {
             : _searchController.text.trim(),
       );
 
+      final filtered = data.where((prof) {
+        final status = prof['status'] as String?;
+        return status == 'APPROVED' || status == 'ACTIVE';
+      }).toList();
+
       setState(() {
-        professionals = data;
+        professionals = filtered;
         _isLoading = false;
       });
     } catch (e) {
